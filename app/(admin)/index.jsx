@@ -1,25 +1,34 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { useIsFocused } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
+  Modal,
+  Pressable,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+
 import Toast from "react-native-toast-message";
-import { useAuth } from "../../src/contexts/AuthContext";
-import createApi from "../../src/services/api";
+import { supabase } from "../../lib/supabase";
+import { useTheme } from "../../src/contexts/ThemeContext";
 
 export default function AdminEvents() {
   const router = useRouter();
-  const { user, token, logout } = useAuth();
-  const api = createApi(token);
+  const { theme, isDark, toggleTheme } = useTheme();
 
   const [events, setEvents] = useState([]);
+  const [filteredEvents, setFilteredEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const isFocused = useIsFocused();
 
   const formatTime = (time) => {
     if (!time) return "-";
@@ -29,25 +38,48 @@ export default function AdminEvents() {
 
   const formatDate = (dateStr) => {
     if (!dateStr) return "-";
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
-    return d.toLocaleDateString("id-ID", {
-      day: "2-digit",
-      month: "long",
-      year: "numeric",
-    });
+    const [y, m, d] = dateStr.split("-");
+    const bulan = [
+      "Januari","Februari","Maret","April","Mei","Juni",
+      "Juli","Agustus","September","Oktober","November","Desember"
+    ];
+    return `${d} ${bulan[Number(m) - 1]} ${y}`;
   };
 
   const loadEvents = async () => {
     try {
-      const res = await api.get("/events");
-      setEvents(res.data.events || []);
+      const { data, error } = await supabase
+        .from("events")
+        .select(`
+          *,
+          event_registrations (id)
+        `)
+        .order("event_date", { ascending: false });
+
+      if (error) {
+        console.error("Error loading events:", error);
+        Toast.show({ 
+          type: "error", 
+          text1: "Gagal memuat event", 
+          text2: error.message 
+        });
+        return;
+      }
+
+      // Ensure event_registrations is always an array
+      const formattedData = (data || []).map(event => ({
+        ...event,
+        event_registrations: event.event_registrations || []
+      }));
+
+      setEvents(formattedData);
+      setFilteredEvents(formattedData);
     } catch (err) {
-      Toast.show({
-        type: "error",
-        text1: "Gagal memuat event",
-        text2: err.message || "Terjadi kesalahan",
-        position: "top",
+      console.error("Unexpected error loading events:", err);
+      Toast.show({ 
+        type: "error", 
+        text1: "Terjadi kesalahan",
+        text2: "Tidak dapat memuat event" 
       });
     } finally {
       setLoading(false);
@@ -55,85 +87,629 @@ export default function AdminEvents() {
   };
 
   useEffect(() => {
-    loadEvents();
-  }, []);
+    if (isFocused) {
+      setLoading(true);
+      loadEvents();
+    }
+  }, [isFocused]);
 
   const handleDelete = async (id) => {
     try {
-      await api.delete(`/events/${id}`);
-      Toast.show({ type: "success", text1: "Event dihapus", position: "top" });
+      const { error } = await supabase
+        .from("events")
+        .delete()
+        .eq("id", id);
+
+      if (error) {
+        console.error("Error deleting event:", error);
+        Toast.show({
+          type: "error",
+          text1: "Gagal menghapus",
+          text2: error.message,
+        });
+        return;
+      }
+
+      Toast.show({ 
+        type: "success", 
+        text1: "Event berhasil dihapus", 
+        position: "top" 
+      });
+      
       setEvents((prev) => prev.filter((e) => e.id !== id));
-    } catch (err) {
+      setFilteredEvents((prev) => prev.filter((e) => e.id !== id));
+      setSelectedEvent(null);
+    } catch (error) {
+      console.error("Unexpected error deleting event:", error);
       Toast.show({
         type: "error",
         text1: "Gagal menghapus",
-        text2: err.message || "Terjadi kesalahan",
-        position: "top",
+        text2: "Terjadi kesalahan tidak terduga",
       });
     }
   };
 
+  const getCategoryStyle = (category) => {
+    const cat = category || "Tanpa Kategori";
+    return theme.categories?.[cat] || theme.categories?.["Tanpa Kategori"] || {
+      bg: theme.card,
+      text: theme.text,
+      border: theme.border
+    };
+  };
+
+  const categories = [
+    "All",
+    ...new Set(events.map((e) => e.category || "Tanpa Kategori")),
+  ];
+
+  useEffect(() => {
+    let list = events;
+
+    if (selectedCategory !== "All") {
+      list = list.filter(
+        (e) => (e.category || "Tanpa Kategori") === selectedCategory
+      );
+    }
+
+    if (searchQuery.trim() !== "") {
+      const lower = searchQuery.toLowerCase();
+      list = list.filter(
+        (e) =>
+          e.title?.toLowerCase().includes(lower) ||
+          (e.category || "Tanpa Kategori").toLowerCase().includes(lower) ||
+          e.location?.toLowerCase().includes(lower)
+      );
+    }
+
+    setFilteredEvents(list);
+  }, [selectedCategory, events, searchQuery]);
+
+  // Helper to get registration count safely
+  const getRegistrationCount = (event) => {
+    return Array.isArray(event?.event_registrations) 
+      ? event.event_registrations.length 
+      : 0;
+  };
+
   return (
-    <View style={styles.container}>
-      {/* Logout */}
-      <TouchableOpacity
-        style={styles.logoutBtn}
-        onPress={() => {
-          logout();
-          router.replace("/(auth)/login");
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+
+      {/* HEADER */}
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          paddingHorizontal: 20,
+          paddingTop: 50,
+          paddingBottom: 30,
+          backgroundColor: theme.primary,
+          borderBottomLeftRadius: 30,
+          borderBottomRightRadius: 30,
+          shadowColor: theme.shadow,
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.3,
+          shadowRadius: 10,
+          elevation: 10,
         }}
       >
-        <Ionicons name="log-out-outline" size={26} color="red" />
-      </TouchableOpacity>
+        <View>
+          <Text style={{ fontSize: 22, fontWeight: "bold", color: "#FFFFFF" }}>
+            Admin Panel
+          </Text>
+          <Text style={{ fontSize: 14, color: "rgba(255,255,255,0.8)", marginBottom: 4 }}>
+            Kelola semua event
+          </Text>
+        </View>
 
-      <Text style={styles.title}>📋 Kelola Event</Text>
+        <View style={{ flexDirection: "row", gap: 20 }}>
+          <TouchableOpacity
+            onPress={toggleTheme}
+            style={{
+              padding: 10,
+              backgroundColor: "rgba(255,255,255,0.2)",
+              borderRadius: 12,
+            }}
+          >
+            <MaterialIcons
+              name={isDark ? "light-mode" : "dark-mode"}
+              size={24}
+              color="#FFFFFF"
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={async () => {
+              try {
+                await supabase.auth.signOut();
+                router.replace("/(auth)/login");
+              } catch (err) {
+                console.error("Error signing out:", err);
+                Toast.show({ 
+                  type: "error", 
+                  text1: "Gagal logout" 
+                });
+              }
+            }}
+            style={{
+              padding: 10,
+              backgroundColor: "rgba(255,255,255,0.2)",
+              borderRadius: 12,
+            }}
+          >
+            <MaterialIcons name="logout" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+      </View>
 
       {loading ? (
-        <ActivityIndicator size="large" />
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+          <ActivityIndicator size="large" color={theme.primary} />
+          <Text style={{ color: theme.textSecondary, marginTop: 16 }}>
+            Memuat event...
+          </Text>
+        </View>
       ) : (
-        <FlatList
-          data={events}
-          keyExtractor={(item) => item.id.toString()}
+        <ScrollView
+          style={{ flex: 1, paddingHorizontal: 20, marginTop: 20 }}
           showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => (
-            <View style={styles.card}>
+        >
+          {/* SEARCH BAR */}
+          <View
+            style={{
+              backgroundColor: theme.card,
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              borderRadius: 16,
+              borderWidth: 2,
+              borderColor: searchQuery ? theme.primary : theme.border,
+              flexDirection: "row",
+              alignItems: "center",
+              marginBottom: 20,
+              shadowColor: theme.primary,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: searchQuery ? 0.2 : 0.08,
+              shadowRadius: 8,
+              elevation: searchQuery ? 6 : 3,
+            }}
+          >
+            <View
+              style={{
+                backgroundColor: theme.primaryLight,
+                padding: 8,
+                borderRadius: 10,
+                marginRight: 12,
+              }}
+            >
+              <MaterialIcons 
+                name="search" 
+                size={22} 
+                color={theme.primary}
+              />
+            </View>
+            
+            <TextInput
+              placeholder="Cari event berdasarkan judul..."
+              placeholderTextColor={theme.textSecondary}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              style={{
+                flex: 1,
+                color: theme.text,
+                fontSize: 15,
+                fontWeight: "500",
+              }}
+            />
+            
+            {searchQuery.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setSearchQuery("")}
+                style={{
+                  backgroundColor: theme.border,
+                  padding: 6,
+                  borderRadius: 8,
+                  marginLeft: 8,
+                }}
+              >
+                <MaterialIcons 
+                  name="close" 
+                  size={18} 
+                  color={theme.textSecondary}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
 
-              {/* KATEGORI */}
-              <Text style={styles.category}>{item.category || "Tanpa Kategori"}</Text>
+          {/* CATEGORY FILTER */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
+            {categories.map((cat) => {
+              const catStyle = cat !== "All" ? getCategoryStyle(cat) : null;
+              const isSelected = selectedCategory === cat;
+              
+              return (
+                <TouchableOpacity
+                  key={cat}
+                  onPress={() => setSelectedCategory(cat)}
+                  style={{
+                    paddingHorizontal: 18,
+                    paddingVertical: 10,
+                    backgroundColor: isSelected 
+                      ? (catStyle?.bg || theme.primary) 
+                      : theme.card,
+                    borderRadius: 20,
+                    marginRight: 10,
+                    borderWidth: 1,
+                    borderColor: isSelected 
+                      ? (catStyle?.border || theme.primary) 
+                      : theme.border,
+                    shadowColor: theme.shadow,
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                    elevation: 2,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: isSelected 
+                        ? (catStyle?.text || "#FFFFFF") 
+                        : theme.text,
+                      fontWeight: "600",
+                      fontSize: 14,
+                    }}
+                  >
+                    {cat}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
 
-              <Text style={styles.eventTitle}>{item.title}</Text>
+          {/* EVENT LIST TITLE */}
+          <Text style={{ fontSize: 18, fontWeight: "bold", color: theme.text, marginBottom: 15 }}>
+            <MaterialIcons name="confirmation-number" size={18} /> Event Tersedia ({filteredEvents.length})
+          </Text>
 
-              <Text style={styles.info}>
-                {formatDate(item.date)} • {formatTime(item.start_time)} -{" "}
-                {formatTime(item.end_time)}
+          {/* EMPTY STATE */}
+          {filteredEvents.length === 0 && (
+            <View style={{ alignItems: "center", marginTop: 60 }}>
+              <Ionicons
+                name="calendar-outline"
+                size={80}
+                color={theme.textTertiary}
+              />
+              <Text
+                style={{
+                  color: theme.textSecondary,
+                  marginTop: 16,
+                  fontSize: 16,
+                }}
+              >
+                {searchQuery || selectedCategory !== "All"
+                  ? "Tidak ada event yang cocok"
+                  : "Belum ada event"}
               </Text>
-
-              <Text style={styles.location}>{item.location}</Text>
-
-              {/* Tombol kanan */}
-              <View style={styles.actionRow}>
-                <TouchableOpacity
-                  style={styles.iconBtn}
-                  onPress={() => router.push(`/(admin)/edit-event/${item.id}`)}
-                >
-                  <Ionicons name="create-outline" size={22} color="#ffaa00" />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.iconBtn}
-                  onPress={() => handleDelete(item.id)}
-                >
-                  <Ionicons name="trash-outline" size={22} color="#ff4444" />
-                </TouchableOpacity>
-              </View>
             </View>
           )}
-        />
+
+          {/* EVENT CARDS */}
+          {filteredEvents.map((item) => {
+            const catStyle = getCategoryStyle(item.category);
+            const registrationCount = getRegistrationCount(item);
+            
+            return (
+              <TouchableOpacity
+                key={item.id}
+                onPress={() => setSelectedEvent(item)}
+                style={{
+                  padding: 16,
+                  borderRadius: 16,
+                  backgroundColor: theme.card,
+                  marginBottom: 16,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  shadowColor: theme.shadow,
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 8,
+                  elevation: 4,
+                }}
+              >
+                <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 10 }}>
+                  <Text
+                    style={{
+                      backgroundColor: catStyle.bg,
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 8,
+                      color: catStyle.text,
+                      fontWeight: "700",
+                      fontSize: 12,
+                      borderWidth: 1,
+                      borderColor: catStyle.border,
+                    }}
+                  >
+                    {item.category || "Tanpa Kategori"}
+                  </Text>
+                </View>
+
+                <Text style={{ fontWeight: "bold", fontSize: 17, color: theme.text, marginBottom: 8 }}>
+                  {item.title}
+                </Text>
+
+                <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
+                  <MaterialIcons name="event" size={16} color={theme.textSecondary} />
+                  <Text style={{ marginLeft: 6, color: theme.textSecondary, fontSize: 14 }}>
+                    {formatDate(item.event_date)}
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
+                  <MaterialIcons name="access-time" size={16} color={theme.textSecondary} />
+                  <Text style={{ marginLeft: 6, color: theme.textSecondary, fontSize: 14 }}>
+                    {formatTime(item.start_time)} - {formatTime(item.end_time)}
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <MaterialIcons name="place" size={16} color={theme.textSecondary} />
+                  <Text style={{ marginLeft: 6, color: theme.textSecondary, fontSize: 14 }}>
+                    {item.location}
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: "row", alignItems: "center", marginTop: 6 }}>
+                  <MaterialIcons name="people" size={16} color={theme.textSecondary} />
+                  <Text style={{ marginLeft: 6, color: theme.textSecondary, fontSize: 14 }}>
+                    {registrationCount} / {item.max_participants} peserta
+                  </Text>
+                </View>
+
+              </TouchableOpacity>
+            );
+          })}
+
+          <View style={{ height: 30 }} />
+        </ScrollView>
       )}
+
+      {/* MODAL DETAIL */}
+      <Modal visible={!!selectedEvent} transparent animationType="fade">
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: theme.overlay,
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 20,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: theme.card,
+              borderRadius: 24,
+              padding: 24,
+              width: "100%",
+              maxWidth: 420,
+              shadowColor: theme.shadow,
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.3,
+              shadowRadius: 16,
+              elevation: 16,
+            }}
+          >
+            <Text style={{ fontSize: 22, fontWeight: "bold", color: theme.text, marginBottom: 12 }}>
+              {selectedEvent?.title}
+            </Text>
+
+            {selectedEvent && (
+              <Text
+                style={{
+                  alignSelf: "flex-start",
+                  backgroundColor: getCategoryStyle(selectedEvent.category).bg,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 8,
+                  color: getCategoryStyle(selectedEvent.category).text,
+                  fontWeight: "700",
+                  marginBottom: 16,
+                  fontSize: 13,
+                  borderWidth: 1,
+                  borderColor: getCategoryStyle(selectedEvent.category).border,
+                }}
+              >
+                {selectedEvent.category || "Tanpa Kategori"}
+              </Text>
+            )}
+
+            <View style={{ backgroundColor: theme.borderLight, height: 1, marginBottom: 16 }} />
+
+            <View style={{ gap: 12, marginBottom: 16 }}>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View
+                  style={{
+                    backgroundColor: theme.primaryLight,
+                    padding: 8,
+                    borderRadius: 10,
+                    marginRight: 12,
+                  }}
+                >
+                  <MaterialIcons name="event" size={20} color={theme.primary} />
+                </View>
+                <Text style={{ color: theme.text, fontSize: 15 }}>
+                  {formatDate(selectedEvent?.event_date)}
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View
+                  style={{
+                    backgroundColor: theme.primaryLight,
+                    padding: 8,
+                    borderRadius: 10,
+                    marginRight: 12,
+                  }}
+                >
+                  <MaterialIcons name="access-time" size={20} color={theme.primary} />
+                </View>
+                <Text style={{ color: theme.text, fontSize: 15 }}>
+                  {formatTime(selectedEvent?.start_time)} - {formatTime(selectedEvent?.end_time)}
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View
+                  style={{
+                    backgroundColor: theme.primaryLight,
+                    padding: 8,
+                    borderRadius: 10,
+                    marginRight: 12,
+                  }}
+                >
+                  <MaterialIcons name="place" size={20} color={theme.primary} />
+                </View>
+                <Text style={{ color: theme.text, fontSize: 15, flex: 1 }}>
+                  {selectedEvent?.location}
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View
+                  style={{
+                    backgroundColor: theme.primaryLight,
+                    padding: 8,
+                    borderRadius: 10,
+                    marginRight: 12,
+                  }}
+                >
+                  <MaterialIcons name="person" size={20} color={theme.primary} />
+                </View>
+                <Text style={{ color: theme.text, fontSize: 15, flex: 1 }}>
+                  {getRegistrationCount(selectedEvent)} / {selectedEvent?.max_participants} Peserta
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ backgroundColor: theme.borderLight, height: 1, marginBottom: 16 }} />
+
+            <Text style={{ color: theme.textSecondary, lineHeight: 22, marginBottom: 20 }}>
+              {selectedEvent?.description || "Tidak ada deskripsi."}
+            </Text>
+
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <Pressable
+                onPress={() => {
+                  const id = selectedEvent.id;
+                  console.log("NAV => ", `/(admin)/edit-event/${id}`);
+                  router.push(`/(admin)/edit-event/${id}`);
+                  setSelectedEvent(null);
+                }}
+                style={{
+                  flex: 1,
+                  paddingVertical: 14,
+                  borderRadius: 12,
+                  backgroundColor: "#ffaa00",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                }}
+              >
+                <Ionicons name="create-outline" size={20} color="#FFFFFF" />
+                <Text
+                  style={{
+                    color: "#FFFFFF",
+                    textAlign: "center",
+                    fontWeight: "700",
+                    fontSize: 16,
+                  }}
+                >
+                  Edit
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => handleDelete(selectedEvent.id)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 14,
+                  borderRadius: 12,
+                  backgroundColor: "#ff4444",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                }}
+              >
+                <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+                <Text
+                  style={{
+                    color: "#FFFFFF",
+                    textAlign: "center",
+                    fontSize: 16,
+                    fontWeight: "700",
+                  }}
+                >
+                  Hapus
+                </Text>
+              </Pressable>
+            </View>
+
+            <Pressable
+  onPress={() => router.push(`/(admin)/event-participants/${selectedEvent.id}`)}
+  style={{
+    marginTop: 16,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: theme.primary,
+  }}
+>
+  <Text
+    style={{
+      color: "#fff",
+      textAlign: "center",
+      fontSize: 16,
+      fontWeight: "700",
+    }}
+  >
+    Lihat Peserta
+  </Text>
+</Pressable>
+
+
+            <Pressable
+              onPress={() => setSelectedEvent(null)}
+              style={{
+                marginTop: 12,
+                paddingVertical: 14,
+                borderRadius: 12,
+                backgroundColor: theme.border,
+              }}
+            >
+              <Text
+                style={{
+                  color: theme.text,
+                  textAlign: "center",
+                  fontSize: 16,
+                  fontWeight: "700",
+                }}
+              >
+                Tutup
+              </Text>
+            </Pressable>
+
+            
+          </View>
+        </View>
+      </Modal>
 
       {/* FAB */}
       <TouchableOpacity
-        style={styles.fab}
+        style={[
+          styles.fab,
+          { backgroundColor: theme.primary, shadowColor: theme.primary },
+        ]}
         onPress={() => router.push("/(admin)/add-event")}
       >
         <Ionicons name="add" size={30} color="#fff" />
@@ -145,63 +721,22 @@ export default function AdminEvents() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: "#fff" },
-
-  title: { fontSize: 24, fontWeight: "bold", marginBottom: 20 },
-
-  logoutBtn: {
-    position: "absolute",
-    right: 10,
-    top: 10,
-    padding: 5,
-    zIndex: 10,
+  container: {
+    flex: 1,
   },
-
-  card: {
-    backgroundColor: "#f2f6ff",
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 14,
-    elevation: 2,
-  },
-
-  category: {
-    alignSelf: "flex-start",
-    backgroundColor: "#dce7ff",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-    color: "#2f60ff",
-    fontWeight: "600",
-    marginBottom: 6,
-  },
-
-  eventTitle: { fontSize: 18, fontWeight: "700", marginBottom: 4 },
-
-  info: { color: "#444", marginBottom: 4 },
-
-  location: { color: "#666", marginBottom: 10 },
-
-  actionRow: {
-    position: "absolute",
-    right: 10,
-    top: 10,
-    flexDirection: "row",
-    gap: 12,
-  },
-
-  iconBtn: { padding: 6 },
 
   fab: {
     position: "absolute",
     right: 20,
     bottom: 30,
-    width: 60,
-    height: 60,
-    backgroundColor: "#007AFF",
-    borderRadius: 30,
+    width: 65,
+    height: 65,
+    borderRadius: 40,
     alignItems: "center",
     justifyContent: "center",
-    elevation: 4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 10,
   },
 });

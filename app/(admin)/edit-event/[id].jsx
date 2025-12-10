@@ -1,407 +1,581 @@
+import { FontAwesome, MaterialIcons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import {
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import Toast from "react-native-toast-message";
-import { useAuth } from "../../../src/contexts/AuthContext";
-import createApi from "../../../src/services/api";
+import { Alert, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { supabase } from "../../../lib/supabase";
+import { useTheme } from "../../../src/contexts/ThemeContext";
+import { formatDateForAPI, formatTime } from "../../../src/utils/helpers";
 
-const CATEGORIES = [
-  "Seminar",
-  "Workshop",
-  "Lomba",
-  "Webinar",
-  "Seminar Kerja Praktik",
-  "Seminar Proposal",
-  "Sidang Terbuka",
-];
+const CATEGORIES = ["Lomba", "Webinar", "Seminar", "Workshop", "Sidang Terbuka", "Seminar Proposal", "Seminar Kerja Praktik"];
+const LOCATION = ["Ruang C Jurusan Informatika", "Ruang D Jurusan Informatika", "Ruang Sidang Jurusan Informatika", "Aula Fakultas Teknik", 
+  "Auditorium Universitas Tanjungpura", "Gedung Konferensi Ruang Teater 1", "Gedung Konferensi Ruang Teater 2", "Gedung Konferensi Ruang Teater 3", "Gedung Konferensi Ruang E-Learning 5"];
+
 
 export default function EditEvent() {
+  const { id } = useLocalSearchParams(); // <-- ambil id event dari URL
   const router = useRouter();
-  const { id } = useLocalSearchParams();
-  const { token } = useAuth();
-  const api = createApi(token);
+  const { theme } = useTheme();
 
-  const [eventData, setEventData] = useState(null);
+  // FORM STATES
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState("");
+  const [eventDate, setEventDate] = useState(new Date(""));
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [location, setLocation] = useState("");
+  const [description, setDescription] = useState("");
+  const [maxParticipants, setMaxParticipants] = useState("");
 
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [locationOpen, setLocationOpen] = useState(false);
+
+const [showDatePicker, setShowDatePicker] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
 
-  const loadEvent = async () => {
-    try {
-      const res = await api.get(`/events/${id}`);
-      const e = res.data.event;
 
-      setEventData({
-        ...e,
-        category: e.category || "",
-        date: e.date ? new Date(e.date) : new Date(),
-        start_time: new Date(`1970-01-01T${e.start_time}`),
-        end_time: new Date(`1970-01-01T${e.end_time}`),
-        price: e.price ? String(e.price) : "0",
-      });
-    } catch {
-      console.log("Gagal load data");
+  // -------------------------------------------------------------
+  // 🔹 FETCH EVENT BASED ON ID
+  // -------------------------------------------------------------
+  const fetchEvent = async () => {
+    setLoading(true);
+
+    const { data, error } = await supabase
+      .from("events")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (error) {
+      Alert.alert("Error", "Gagal mengambil data event.");
+      console.log(error);
+      return;
     }
+
+    // isi form berdasarkan data dari Supabase
+    setTitle(data.title || "");
+    setCategory(data.category || "");
+    setEventDate(data.event_date ? new Date(data.event_date) : new Date());
+    setStartTime(data.start_time || "");
+    setEndTime(data.end_time || "");
+    setLocation(data.location || "");
+    setDescription(data.description || "");
+    setMaxParticipants(String(data.max_participants || ""));
+
+    setLoading(false);
   };
 
   useEffect(() => {
-    loadEvent();
-  }, []);
+    fetchEvent();
+  }, [id]);
 
-  if (!eventData) return null;
-
-  const formatDate = (d) => d.toISOString().split("T")[0];
-  const formatTime = (t) =>
-    t.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-
+  // -------------------------------------------------------------
+  // 🔹 UPDATE EVENT
+  // -------------------------------------------------------------
   const handleSave = async () => {
-    try {
-      await api.put(`/events/${id}`, {
-        title: eventData.title,
-        category: eventData.category,
-        date: formatDate(eventData.date),
-        start_time: formatTime(eventData.start_time),
-        end_time: formatTime(eventData.end_time),
-        location: eventData.location,
-        description: eventData.description,
-        price: Number(eventData.price),
-      });
-
-      Toast.show({
-        type: "success",
-        text1: "Event diperbarui",
-      });
-
-      setTimeout(() => router.replace("/(admin)"), 800);
-    } catch (err) {
-      Toast.show({
-        type: "error",
-        text1: "Gagal update",
-        text2: err.response?.data?.message || err.message,
-      });
+    if (!title || !category || !eventDate || !startTime || !endTime || !location || !maxParticipants || !description) {
+      Alert.alert("Peringatan", "Harap isi semua field wajib.");
+      return;
     }
+
+    setLoading(true);
+
+    const { error } = await supabase
+      .from("events")
+      .update({
+        title,
+        category,
+        event_date: formatDateForAPI(eventDate),
+        start_time: formatTime(startTime),
+        end_time: formatTime(endTime),
+        location,
+        description,
+        max_participants: maxParticipants,
+        updated_at: new Date(),
+      })
+      .eq("id", id);
+
+    setLoading(false);
+
+    if (error) {
+      console.log(error);
+      Alert.alert("Error", "Gagal memperbarui event.");
+      return;
+    }
+
+    Alert.alert("Berhasil", "Event berhasil diperbarui!", [
+      { text: "OK", onPress: () => router.replace("/(admin)") },
+    ]);
   };
 
-  return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ paddingBottom: 40 }}
-      showsVerticalScrollIndicator={false}
-    >
-      <Text style={styles.title}>✏️ Edit Event</Text>
-
-      {/* JUDUL */}
-      <TextInput
-        style={styles.input}
-        value={eventData.title}
-        onChangeText={(v) => setEventData({ ...eventData, title: v })}
-      />
-
-      {/* KATEGORI (SAMA PERSIS SEPERTI ADD) */}
-      <Text style={styles.label}>Kategori Event</Text>
-
-      <View style={styles.dropdown}>
-        {Platform.OS === "web" ? (
-          <select
-            value={eventData.category}
-            onChange={(e) =>
-              setEventData({ ...eventData, category: e.target.value })
-            }
-            style={{ width: "100%", padding: 12, borderRadius: 8 }}
-          >
-            <option value="">Pilih kategori</option>
-            {CATEGORIES.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <TouchableOpacity
-            style={styles.dropdownBtn}
-            onPress={() =>
-              setEventData({
-                ...eventData,
-                openDropdown: !eventData.openDropdown,
-              })
-            }
-          >
-            <Text>{eventData.category || "Pilih kategori"}</Text>
-          </TouchableOpacity>
-        )}
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <Text style={{ color: theme.text }}>Loading...</Text>
       </View>
+    );
+  }
 
-      {eventData.openDropdown && Platform.OS !== "web" && (
-        <View style={styles.dropdownList}>
-          {CATEGORIES.map((cat) => (
-            <TouchableOpacity
-              key={cat}
-              style={styles.dropdownItem}
-              onPress={() =>
-                setEventData({
-                  ...eventData,
-                  category: cat,
-                  openDropdown: false,
-                })
-              }
-            >
-              <Text>{cat}</Text>
-            </TouchableOpacity>
-          ))}
+  return (
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      {/* HEADER */}
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          paddingHorizontal: 20,
+          paddingTop: 50,
+          paddingBottom: 30,
+          backgroundColor: theme.primary,
+          borderBottomLeftRadius: 30,
+          borderBottomRightRadius: 30,
+          shadowColor: theme.shadow,
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.3,
+          shadowRadius: 10,
+          elevation: 10,
+        }}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 22, fontWeight: "bold", color: "#FFFFFF" }}>
+            Edit Event
+          </Text>
+          <Text style={{ fontSize: 14, color: "rgba(255,255,255,0.8)", marginTop: 4 }}>
+            Perbarui detail event
+          </Text>
         </View>
-      )}
 
-      {/* TANGGAL */}
-      <Text style={styles.label}>Tanggal Event</Text>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={{
+            padding: 10,
+            backgroundColor: "rgba(255,255,255,0.2)",
+            borderRadius: 12,
+          }}
+        >
+          <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
+      
+      <ScrollView style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}>
 
-      {Platform.OS === "web" ? (
-        <input
-          type="date"
-          value={formatDate(eventData.date)}
-          onChange={(e) =>
-            setEventData({ ...eventData, date: new Date(e.target.value) })
-          }
-          className="web-input"
-        />
-      ) : (
-        <>
+          <View
+        style={{
+          backgroundColor: theme.card,
+          padding: 20,
+          borderRadius: 20,
+          borderWidth: 1,
+          borderColor: theme.border,
+          shadowColor: theme.shadow,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          elevation: 4,
+        }}
+      >
+        {/* JUDUL EVENT */}
+        <View style={{ marginBottom: 20 }}>
+          <InputLabel icon="font" theme={theme} label="Judul Event" />
+          <StyledInput
+            placeholder="Masukkan judul event"
+            value={title}
+            onChangeText={setTitle}
+            theme={theme}
+          />
+        </View>
+
+        {/*KATEGORI*/}
+        <View style={{ marginBottom: 20 }}>
+          <InputLabel icon="puzzle-piece" theme={theme} label="Kategori Event" />
+
+          {/* MOBILE DROPDOWN */}
           <TouchableOpacity
-            style={styles.input}
+            style={{
+              borderWidth: 2,
+              borderColor: category ? theme.primary : theme.border,
+              padding: 14,
+              borderRadius: 12,
+              backgroundColor: theme.background,
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+            onPress={() => setCategoryOpen(!categoryOpen)}
+          >
+            <Text style={{ color: theme.text, fontSize: 15 }}>
+              {category || "Pilih kategori"}
+            </Text>
+            <MaterialIcons name="arrow-drop-down" size={24} color={theme.textSecondary} />
+          </TouchableOpacity>
+
+          {categoryOpen && (
+            <View
+              style={{
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: 12,
+                overflow: "hidden",
+                marginTop: 8,
+                backgroundColor: theme.card,
+              }}
+            >
+              {CATEGORIES.map((cat, idx) => (
+                <TouchableOpacity
+                  key={cat}
+                  style={{
+                    padding: 14,
+                    backgroundColor: theme.background,
+                    borderBottomWidth: idx < CATEGORIES.length - 1 ? 1 : 0,
+                    borderColor: theme.border,
+                  }}
+                  onPress={() => {
+                    setCategory(cat);
+                    setCategoryOpen(false);
+                  }}
+                >
+                  <Text style={{ color: theme.text }}>{cat}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* TANGGAL EVENT */}
+        <View style={{ marginBottom: 20 }}>
+          <InputLabel icon="calendar" theme={theme} label="Tanggal Event" />
+          <TouchableOpacity
+            style={{
+              borderWidth: 2,
+              borderColor: eventDate ? theme.primary : theme.border,
+              padding: 14,
+              borderRadius: 12,
+              backgroundColor: theme.background,
+            }}
             onPress={() => setShowDatePicker(true)}
           >
-            <Text>{formatDate(eventData.date)}</Text>
+            <Text style={{ color: theme.text, fontSize: 15 }}>
+              {eventDate.toLocaleDateString("id-ID")}
+            </Text>
           </TouchableOpacity>
 
           {showDatePicker && (
             <DateTimePicker
-              value={eventData.date}
+              value={eventDate}
               mode="date"
               onChange={(e, selected) => {
                 setShowDatePicker(false);
-                if (selected)
-                  setEventData({ ...eventData, date: selected });
+                if (selected) setEventDate(selected);
               }}
             />
           )}
-        </>
-      )}
+        </View>
 
-      {/* TIME ROW — SAMA PERSIS DENGAN ADD */}
-      <View style={styles.row}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.label}>Jam Mulai</Text>
+        {/* WAKTU EVENT */}
+        <View style={{ marginBottom: 20 }}>
+          <InputLabel icon="clock-o" theme={theme} label="Waktu Event" />
 
-          {Platform.OS === "web" ? (
-  <input
-    type="time"
-    value={formatTime(eventData.start_time)}
-    onChange={(e) =>
-      setEventData({
-        ...eventData,
-        start_time: new Date(`1970-01-01T${e.target.value}`),
-      })
-    }
-    className="web-input"
-  />
-) : (
-  <>
+          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+    {/* START TIME */}
     <TouchableOpacity
-      style={styles.input}
+      style={{
+        flex: 1,
+        borderWidth: 2,
+        borderColor: startTime ? theme.primary : theme.border,
+        padding: 14,
+        borderRadius: 12,
+        backgroundColor: theme.background,
+      }}
       onPress={() => setShowStartPicker(true)}
     >
-      <Text>{formatTime(eventData.start_time)}</Text>
+      <Text style={{ color: theme.text }}>
+        {formatTime(startTime)}
+      </Text>
     </TouchableOpacity>
 
-    {showStartPicker && (
-      <DateTimePicker
-        value={eventData.start_time}
-        mode="time"
-        is24Hour
-        onChange={(e, selected) => {
-          setShowStartPicker(false);
-          if (selected)
-            setEventData({ ...eventData, start_time: selected });
-        }}
-      />
-    )}
-  </>
-)}
+    {/* STRIP "-" */}
+    <Text
+      style={{
+        marginHorizontal: 10,
+        marginVertical: 10,
+        fontSize: 18,
+        color: theme.text,
+      }}
+    >
+      —
+    </Text>
 
-        </View>
-
-        <Text style={styles.strip}>—</Text>
-
-        <View style={{ flex: 1 }}>
-          <Text style={styles.label}>Jam Selesai</Text>
-
-          {Platform.OS === "web" ? (
-  <input
-    type="time"
-    value={formatTime(eventData.end_time)}
-    onChange={(e) =>
-      setEventData({
-        ...eventData,
-        end_time: new Date(`1970-01-01T${e.target.value}`),
-      })
-    }
-    className="web-input"
-  />
-) : (
-  <>
+    {/* END TIME */}
     <TouchableOpacity
-      style={styles.input}
+      style={{
+        flex: 1,
+        borderWidth: 2,
+        borderColor: endTime ? theme.primary : theme.border,
+        padding: 14,
+        borderRadius: 12,
+        backgroundColor: theme.background,
+      }}
       onPress={() => setShowEndPicker(true)}
     >
-      <Text>{formatTime(eventData.end_time)}</Text>
+      <Text style={{ color: theme.text }}>
+        {formatTime(endTime)}
+      </Text>
     </TouchableOpacity>
+  </View>
 
-    {showEndPicker && (
-      <DateTimePicker
-        value={eventData.end_time}
-        mode="time"
-        is24Hour
-        onChange={(e, selected) => {
-          setShowEndPicker(false);
-          if (selected)
-            setEventData({ ...eventData, end_time: selected });
-        }}
-      />
-    )}
-  </>
-)}
-
-        </View>
-      </View>
-
-      {/* INPUT LAINNYA */}
-      <TextInput
-        style={styles.input}
-        value={eventData.location}
-        onChangeText={(v) => setEventData({ ...eventData, location: v })}
-      />
-
-      <TextInput
-        style={styles.input}
-        value={eventData.description}
-        onChangeText={(v) =>
-          setEventData({ ...eventData, description: v })
+  {/* START TIME PICKER */}
+  {showStartPicker && (
+    <DateTimePicker
+      mode="time"
+      value={new Date()}
+      is24Hour={true}
+      onChange={(event, selected) => {
+        setShowStartPicker(false);
+        if (selected) {
+          const formatted = selected.toTimeString().slice(0, 5);
+          setStartTime(formatted);
         }
-      />
+      }}
+    />
+  )}
 
-      <TextInput
-        style={styles.input}
-        value={eventData.price}
-        onChangeText={(v) => setEventData({ ...eventData, price: v })}
-        keyboardType="numeric"
-      />
+  {/* END TIME PICKER */}
+  {showEndPicker && (
+    <DateTimePicker
+      mode="time"
+      value={new Date()}
+      is24Hour={true}
+      onChange={(event, selected) => {
+        setShowEndPicker(false);
+        if (selected) {
+          const formatted = selected.toTimeString().slice(0, 5);
+          setEndTime(formatted);
+        }
+      }}
+    />
+  )}
+        </View>
 
-      {/* BUTTONS */}
-      <View style={styles.btnRow}>
-        <TouchableOpacity style={styles.btn} onPress={handleSave}>
-          <Text style={styles.btnText}>Simpan</Text>
-        </TouchableOpacity>
+        {/*LOKASI*/}
+        <View style={{ marginBottom: 20 }}>
+          <InputLabel icon="map" theme={theme} label="Lokasi Event" />
 
-        <TouchableOpacity
-          style={styles.btnOutline}
-          onPress={() => router.back()}
-        >
-          <Text style={styles.btnOutlineText}>Kembali</Text>
-        </TouchableOpacity>
+          {/* MOBILE DROPDOWN */}
+          <TouchableOpacity
+            style={{
+              borderWidth: 2,
+              borderColor: location ? theme.primary : theme.border,
+              padding: 14,
+              borderRadius: 12,
+              backgroundColor: theme.background,
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+            onPress={() => setLocationOpen(!locationOpen)}
+          >
+            <Text style={{ color: theme.text, fontSize: 15 }}>
+              {location || "Pilih kategori"}
+            </Text>
+            <MaterialIcons name="arrow-drop-down" size={24} color={theme.textSecondary} />
+          </TouchableOpacity>
+
+          {locationOpen && (
+            <View
+              style={{
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: 12,
+                overflow: "hidden",
+                marginTop: 8,
+                backgroundColor: theme.card,
+              }}
+            >
+              {LOCATION.map((cat, idx) => (
+                <TouchableOpacity
+                  key={cat}
+                  style={{
+                    padding: 14,
+                    backgroundColor: theme.background,
+                    borderBottomWidth: idx < CATEGORIES.length - 1 ? 1 : 0,
+                    borderColor: theme.border,
+                  }}
+                  onPress={() => {
+                    setLocation(cat);
+                    setLocationOpen(false);
+                  }}
+                >
+                  <Text style={{ color: theme.text }}>{cat}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* DESKRIPSI */}
+        <View style={{ marginBottom: 20 }}>
+          <InputLabel icon="leanpub" theme={theme} label="Deskripsi Event" />
+          <TextInput
+            style={{
+              borderWidth: 2,
+              borderColor: description? theme.primary : theme.border,
+              padding: 14,
+              borderRadius: 12,
+              backgroundColor: theme.background,
+              color: theme.text,
+              fontSize: 15,
+              height: 120,
+              textAlignVertical: "top",
+            }}
+            multiline
+            placeholder="Masukkan deskripsi event"
+            placeholderTextColor={theme.textSecondary}
+            value={description}
+            onChangeText={setDescription}
+          />
+        </View>
+
+        {/* MAKS PESERTA */}
+        <View style={{ marginBottom: 20 }}>
+          <InputLabel icon="users" theme={theme} label="Maksimal Peserta" />
+          <StyledInput
+            placeholder="0"
+            value={maxParticipants}
+            keyboardType="numeric"
+            onChangeText={setMaxParticipants}
+            theme={theme}
+          />
+        </View>
+
+        {/* BUTTONS */}
+          <View style={{ flexDirection: "row", gap: 12, marginTop: 10 }}>
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                backgroundColor: theme.success,
+                padding: 16,
+                borderRadius: 12,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                shadowColor: theme.success,
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 8,
+                elevation: 4,
+              }}
+              onPress={handleSave}
+            >
+              <MaterialIcons name="check-circle" size={20} color="#FFFFFF" />
+              <Text
+                style={{
+                  textAlign: "center",
+                  color: "#FFFFFF",
+                  fontWeight: "700",
+                  fontSize: 16,
+                  marginLeft: 8,
+                }}
+              >
+                Simpan
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                backgroundColor: theme.border,
+                padding: 16,
+                borderRadius: 12,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              onPress={() => router.back()}
+            >
+              <MaterialIcons name="close" size={20} color={theme.text} />
+              <Text
+                style={{
+                  textAlign: "center",
+                  color: theme.text,
+                  fontWeight: "700",
+                  fontSize: 16,
+                  marginLeft: 8,
+                }}
+              >
+                Batal
+              </Text>
+            </TouchableOpacity>
+          </View>
       </View>
-
-      <Toast />
-    </ScrollView>
+      </ScrollView>    
+      {/* <Toast position="top" topOffset={50} />   */}
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { padding: 20, backgroundColor: "white" },
+// -------------------------------------------------------------
+// 🔸 COMPONENT REUSABLE
+// -------------------------------------------------------------
+function InputLabel({ icon, label, theme }) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
+      <View
+        style={{
+          backgroundColor: theme.primaryLight,
+          padding: 6,
+          borderRadius: 8,
+          marginRight: 8,
+        }}
+      >
+        <FontAwesome name={icon} size={18} color={theme.primary} />
+      </View>
+      <Text style={{ fontWeight: "600", fontSize: 15, color: theme.text }}>
+        {label}
+      </Text>
+    </View>
+  );
+}
 
-  title: { fontSize: 24, fontWeight: 700, marginBottom: 20 },
+function StyledInput(props) {
+  const { theme } = useTheme();
+  return (
+    <TextInput
+      {...props}
+      style={{
+        borderWidth: 2,
+        borderColor: props.value ? theme.primary : theme.border,
+        padding: 14,
+        borderRadius: 12,
+        backgroundColor: theme.background,
+        color: theme.text,
+        fontSize: 15,
+      }}
+      placeholderTextColor={theme.textSecondary}
+    />
+  );
+}
 
-  label: { fontSize: 14, fontWeight: "600", marginBottom: 6 },
-
-  dropdown: { marginBottom: 12 },
-
-  dropdownBtn: {
-    borderWidth: 1,
-    borderColor: "#bbb",
-    padding: 14,
-    borderRadius: 8,
-  },
-
-  dropdownList: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    overflow: "hidden",
-    marginBottom: 12,
-  },
-
-  dropdownItem: {
-    padding: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-  },
-
-  row: { flexDirection: "row", marginTop: 12, marginBottom: 18 },
-
-  strip: {
-    fontSize: 22,
-    marginHorizontal: 12,
-    alignSelf: "center",
-    fontWeight: "bold",
-    marginTop: 18,
-  },
-
-  input: {
-    borderWidth: 1,
-    borderColor: "#bbb",
-    padding: 14,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-
-  btnRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 10,
-  },
-
-  btn: {
-    backgroundColor: "#007AFF",
-    padding: 12,
-    borderRadius: 8,
-    flex: 1,
-  },
-
-  btnText: {
-    textAlign: "center",
-    color: "white",
-    fontWeight: "bold",
-  },
-
-  btnOutline: {
-    borderWidth: 2,
-    borderColor: "#007AFF",
-    padding: 12,
-    borderRadius: 8,
-    flex: 1,
-  },
-
-  btnOutlineText: {
-    textAlign: "center",
-    color: "#007AFF",
-    fontWeight: "bold",
-  },
-});
+function StyledTimeInput(props) {
+  const { theme } = useTheme();
+  return (
+    <TextInput
+      {...props}
+      placeholder="HH:MM"
+      style={{
+        flex: 1,
+        borderWidth: 2,
+        borderColor: props.value ? theme.primary : theme.border,
+        padding: 14,
+        borderRadius: 12,
+        backgroundColor: theme.background,
+        color: theme.text,
+        fontSize: 15,
+      }}
+      placeholderTextColor={theme.textSecondary}
+    />
+  );
+}

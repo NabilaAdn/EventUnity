@@ -1,9 +1,11 @@
 import { Stack } from "expo-router";
 import Toast from "react-native-toast-message"; // ⬅️ Tambahkan import ini
 import { AuthProvider } from "../src/contexts/AuthContext";
+import { ThemeProvider } from "../src/contexts/ThemeContext";
 
 export default function RootLayout() {
   return (
+    <ThemeProvider>
     <AuthProvider>
       {/* Stack navigasi utama */}
       <Stack screenOptions={{ headerShown: false }}>
@@ -21,5 +23,6 @@ export default function RootLayout() {
         bottomOffset={60}
       />
     </AuthProvider>
+    </ThemeProvider>
   );
 }

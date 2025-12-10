@@ -34,6 +34,10 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "supabaseUrl": "https://mlcumdisglcaczchhamu.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1sY3VtZGlzZ2xjYWN6Y2hoYW11Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ3MzcyMTEsImV4cCI6MjA4MDMxMzIxMX0.W0ow9h4TajjW1MYQNv1JvB1xs30AsrkIhnpJrKd8ijg"
     }
   }
 }
