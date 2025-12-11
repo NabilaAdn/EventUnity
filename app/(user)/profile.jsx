@@ -770,7 +770,7 @@ const saveProfile = async () => {
         <TextInput
           style={{ padding: 12, color: theme.text }}
           value={editTelepon}
-          onChangeText={setEditTeditTelepon}
+          onChangeText={setEditTelepon}
         />
       </View>
 
