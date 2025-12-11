@@ -27,6 +27,7 @@ export default function UserHome() {
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
   const [userRegisteredEvents, setUserRegisteredEvents] = useState([]);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const [selectedFilters, setSelectedFilters] = useState({
     category: "All",
@@ -366,19 +367,10 @@ useEffect(() => {
       {/* HEADER */}
       <View
         style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-          paddingHorizontal: 20,
-          paddingTop: 50,
-          paddingBottom: 30,
-          backgroundColor: theme.primary,
-          borderBottomLeftRadius: 30,
-          borderBottomRightRadius: 30,
-          shadowColor: theme.shadow,
-          shadowOffset: { width: 0, height: 6 },
-          shadowOpacity: 0.3,
-          shadowRadius: 10,
+          flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20,
+          paddingTop: 50, paddingBottom: 30, backgroundColor: theme.primary, borderBottomLeftRadius: 30,
+          borderBottomRightRadius: 30, shadowColor: theme.shadow, shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.3, shadowRadius: 10,
           elevation: 10,
         }}
       >
@@ -408,18 +400,12 @@ useEffect(() => {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={async () => {
-              await supabase.auth.signOut();
-              router.replace("/(auth)/login");
-            }}
-            style={{
-              padding: 10,
-              backgroundColor: "rgba(255,255,255,0.2)",
-              borderRadius: 12,
-            }}
+            onPress={() => setShowLogoutModal(true)}
+            style={{ padding: 10, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 12 }}
           >
             <MaterialIcons name="logout" size={24} color="#FFFFFF" />
           </TouchableOpacity>
+
         </View>
       </View>
 
@@ -980,6 +966,85 @@ useEffect(() => {
           </View>
         </View>
       </Modal>
+
+      {/* LOGOUT CONFIRMATION MODAL */}
+<Modal
+  visible={showLogoutModal}
+  transparent
+  animationType="fade"
+>
+  <View style={{
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  }}>
+    <View style={{
+      width: "100%",
+      backgroundColor: theme.card,
+      padding: 25,
+      borderRadius: 16,
+      alignItems: "center",
+    }}>
+      <MaterialIcons name="logout" size={40} color={theme.primary} />
+
+      <Text style={{
+        fontSize: 18,
+        fontWeight: "700",
+        marginTop: 15,
+        color: theme.text,
+      }}>
+        Konfirmasi Logout
+      </Text>
+
+      <Text style={{
+        fontSize: 14,
+        marginTop: 10,
+        textAlign: "center",
+        color: theme.textSecondary,
+      }}>
+        Apakah kamu yakin ingin keluar dari akun?
+      </Text>
+
+      {/* Buttons */}
+      <View style={{ flexDirection: "row", marginTop: 25, gap: 12 }}>
+        
+        {/* Cancel */}
+        <TouchableOpacity
+          onPress={() => setShowLogoutModal(false)}
+          style={{
+            paddingVertical: 10,
+            paddingHorizontal: 20,
+            borderRadius: 10,
+            backgroundColor: theme.border,
+          }}
+        >
+          <Text style={{ color: theme.text, fontWeight: "600" }}>Batal</Text>
+        </TouchableOpacity>
+
+        {/* Confirm Logout */}
+        <TouchableOpacity
+          onPress={async () => {
+            setShowLogoutModal(false);
+            await supabase.auth.signOut();
+            router.replace("/(auth)/login");
+          }}
+          style={{
+            paddingVertical: 10,
+            paddingHorizontal: 20,
+            borderRadius: 10,
+            backgroundColor: theme.primary,
+          }}
+        >
+          <Text style={{ color: "#fff", fontWeight: "700" }}>Logout</Text>
+        </TouchableOpacity>
+
+      </View>
+    </View>
+  </View>
+</Modal>
+
 
       <Toast />
     </View>

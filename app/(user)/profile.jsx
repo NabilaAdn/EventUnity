@@ -568,36 +568,19 @@ const saveProfile = async () => {
       <Modal transparent visible={showModal} animationType="fade">
         <View
           style={{
-            flex: 1,
-            backgroundColor: theme.overlay,
-            justifyContent: "center",
-            alignItems: "center",
-            padding: 20,
+            flex: 1, backgroundColor: theme.overlay, justifyContent: "center", alignItems: "center", padding: 20,
           }}
         >
           <View
             style={{
-              backgroundColor: theme.card,
-              width: "90%",
-              maxWidth: 400,
-              borderRadius: 24,
-              padding: 28,
-              alignItems: "center",
-              shadowColor: theme.shadow,
-              shadowOpacity: 0.3,
-              shadowRadius: 16,
-              elevation: 10,
+              backgroundColor: theme.card, width: "90%", maxWidth: 400, borderRadius: 24, padding: 28,
+              alignItems: "center", shadowColor: theme.shadow, shadowOpacity: 0.3, shadowRadius: 16, elevation: 10,
             }}
           >
             <View
               style={{
-                width: 70,
-                height: 70,
-                borderRadius: 35,
-                backgroundColor: theme.errorLight,
-                alignItems: "center",
-                justifyContent: "center",
-                marginBottom: 20,
+                width: 70, height: 70, borderRadius: 35, backgroundColor: theme.errorLight,
+                alignItems: "center", justifyContent: "center", marginBottom: 20,
               }}
             >
               <Ionicons name="warning" size={36} color={theme.error} />
@@ -605,10 +588,7 @@ const saveProfile = async () => {
 
             <Text
               style={{
-                fontSize: 24,
-                fontWeight: "700",
-                marginBottom: 12,
-                color: theme.text,
+                fontSize: 24, fontWeight: "700", marginBottom: 12, color: theme.text,
               }}
             >
               Yakin Batalkan?
@@ -616,11 +596,7 @@ const saveProfile = async () => {
 
             <Text
               style={{
-                textAlign: "center",
-                marginBottom: 28,
-                color: theme.textSecondary,
-                fontSize: 15,
-                lineHeight: 22,
+                textAlign: "center", marginBottom: 28, color: theme.textSecondary, fontSize: 15, lineHeight: 22,
               }}
             >
               Kamu tidak akan bisa mengikuti event ini lagi setelah dibatalkan.
@@ -630,18 +606,12 @@ const saveProfile = async () => {
               <Pressable
                 onPress={() => setShowModal(false)}
                 style={{
-                  flex: 1,
-                  backgroundColor: theme.border,
-                  paddingVertical: 14,
-                  borderRadius: 12,
+                  flex: 1, backgroundColor: theme.border, paddingVertical: 14, borderRadius: 12,
                 }}
               >
                 <Text
                   style={{
-                    textAlign: "center",
-                    fontSize: 16,
-                    fontWeight: "600",
-                    color: theme.text,
+                    textAlign: "center", fontSize: 16, fontWeight: "600", color: theme.text,
                   }}
                 >
                   Tidak
@@ -651,18 +621,12 @@ const saveProfile = async () => {
               <Pressable
                 onPress={handleCancelRegistration}
                 style={{
-                  flex: 1,
-                  backgroundColor: theme.error,
-                  paddingVertical: 14,
-                  borderRadius: 12,
+                  flex: 1, backgroundColor: theme.error, paddingVertical: 14, borderRadius: 12,
                 }}
               >
                 <Text
                   style={{
-                    textAlign: "center",
-                    fontSize: 16,
-                    fontWeight: "700",
-                    color: "#FFFFFF",
+                    textAlign: "center", fontSize: 16, fontWeight: "700", color: "#FFFFFF",
                   }}
                 >
                   Ya, Batalkan
