@@ -587,14 +587,6 @@ const saveProfile = async () => {
               Yakin Batalkan?
             </Text>
 
-            <Text
-              style={{
-                textAlign: "center", marginBottom: 28, color: theme.textSecondary, fontSize: 15, lineHeight: 22,
-              }}
-            >
-              Kamu tidak akan bisa mengikuti event ini lagi setelah dibatalkan.
-            </Text>
-
             <View style={{ flexDirection: "row", width: "100%", gap: 12 }}>
               <Pressable
                 onPress={() => setShowModal(false)}
