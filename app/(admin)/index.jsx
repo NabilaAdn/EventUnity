@@ -21,6 +21,8 @@ import { useTheme } from "../../src/contexts/ThemeContext";
 export default function AdminEvents() {
   const router = useRouter();
   const { theme, isDark, toggleTheme } = useTheme();
+    const [showLogoutModal, setShowLogoutModal] = useState(false);
+
 
   const [events, setEvents] = useState([]);
   const [filteredEvents, setFilteredEvents] = useState([]);
@@ -220,23 +222,8 @@ export default function AdminEvents() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={async () => {
-              try {
-                await supabase.auth.signOut();
-                router.replace("/(auth)/login");
-              } catch (err) {
-                console.error("Error signing out:", err);
-                Toast.show({ 
-                  type: "error", 
-                  text1: "Gagal logout" 
-                });
-              }
-            }}
-            style={{
-              padding: 10,
-              backgroundColor: "rgba(255,255,255,0.2)",
-              borderRadius: 12,
-            }}
+            onPress={() => setShowLogoutModal(true)}
+            style={{ padding: 10, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 12 }}
           >
             <MaterialIcons name="logout" size={24} color="#FFFFFF" />
           </TouchableOpacity>
@@ -703,6 +690,85 @@ export default function AdminEvents() {
           </View>
         </View>
       </Modal>
+
+      {/* LOGOUT CONFIRMATION MODAL */}
+<Modal
+  visible={showLogoutModal}
+  transparent
+  animationType="fade"
+>
+  <View style={{
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  }}>
+    <View style={{
+      width: "100%",
+      backgroundColor: theme.card,
+      padding: 25,
+      borderRadius: 16,
+      alignItems: "center",
+    }}>
+      <MaterialIcons name="logout" size={40} color={theme.primary} />
+
+      <Text style={{
+        fontSize: 18,
+        fontWeight: "700",
+        marginTop: 15,
+        color: theme.text,
+      }}>
+        Konfirmasi Logout
+      </Text>
+
+      <Text style={{
+        fontSize: 14,
+        marginTop: 10,
+        textAlign: "center",
+        color: theme.textSecondary,
+      }}>
+        Apakah kamu yakin ingin keluar dari akun?
+      </Text>
+
+      {/* Buttons */}
+      <View style={{ flexDirection: "row", marginTop: 25, gap: 12 }}>
+        
+        {/* Cancel */}
+        <TouchableOpacity
+          onPress={() => setShowLogoutModal(false)}
+          style={{
+            paddingVertical: 10,
+            paddingHorizontal: 20,
+            borderRadius: 10,
+            backgroundColor: theme.border,
+          }}
+        >
+          <Text style={{ color: theme.text, fontWeight: "600" }}>Batal</Text>
+        </TouchableOpacity>
+
+        {/* Confirm Logout */}
+        <TouchableOpacity
+          onPress={async () => {
+            setShowLogoutModal(false);
+            await supabase.auth.signOut();
+            router.replace("/(auth)/login");
+          }}
+          style={{
+            paddingVertical: 10,
+            paddingHorizontal: 20,
+            borderRadius: 10,
+            backgroundColor: theme.primary,
+          }}
+        >
+          <Text style={{ color: "#fff", fontWeight: "700" }}>Logout</Text>
+        </TouchableOpacity>
+
+      </View>
+    </View>
+  </View>
+</Modal>
+
 
       {/* FAB */}
       <TouchableOpacity

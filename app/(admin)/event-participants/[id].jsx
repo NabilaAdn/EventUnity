@@ -46,7 +46,7 @@ export default function EventParticipants() {
           profiles (
       id,
       name,
-      email
+      email, phone_number,
     )
         `)
         .eq("event_id", id)
@@ -315,6 +315,30 @@ export default function EventParticipants() {
                     }}
                   >
                     {p.profiles?.email || "Email tidak tersedia"}
+                  </Text>
+                </View>
+
+                {/* No Telepon */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: 8,
+                  }}
+                >
+                  <MaterialIcons
+                    name="phone"
+                    size={16}
+                    color={theme.textSecondary}
+                  />
+                  <Text
+                    style={{
+                      marginLeft: 8,
+                      color: theme.textSecondary,
+                      fontSize: 14,
+                    }}
+                  >
+                    {p.profiles?.phone_number || "Nomor Telepon tidak tersedia"}
                   </Text>
                 </View>
 
