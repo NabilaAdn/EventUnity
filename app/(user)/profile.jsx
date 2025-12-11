@@ -180,7 +180,6 @@ export default function UserProfile() {
 const [editName, setEditName] = useState("");
 const [editUsername, setEditUsername] = useState("");
 const [editEmail, setEditEmail] = useState("");
-const [editTelepon, setEditTelepon] = useState("");
 const [saving, setSaving] = useState(false);
 
 const openEditProfile = () => {
@@ -189,7 +188,6 @@ const openEditProfile = () => {
   setEditName(profile.name || "");
   setEditUsername(profile.username || "");
   setEditEmail(profile.email || "");
-  setEditTelepon(profile.phone_number || "");
 
   setEditModal(true);
 };
@@ -205,7 +203,6 @@ const saveProfile = async () => {
       name: editName,
       username: editUsername,
       email: editEmail,
-      phone_number: editTelepon,
     })
     .eq("id", user.id);
 
@@ -753,24 +750,6 @@ const saveProfile = async () => {
           value={editEmail}
           onChangeText={setEditEmail}
           autoCapitalize="none"
-        />
-      </View>
-
-      {/* INPUT No Telepon */}
-      <Text style={{ color: theme.textSecondary, marginBottom: 6 }}>No Telepon</Text>
-      <View
-        style={{
-          borderWidth: 1,
-          borderColor: theme.border,
-          backgroundColor: theme.background,
-          borderRadius: 10,
-          marginBottom: 16,
-        }}
-      >
-        <TextInput
-          style={{ padding: 12, color: theme.text }}
-          value={editTelepon}
-          onChangeText={setEditTelepon}
         />
       </View>
 
