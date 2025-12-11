@@ -17,7 +17,7 @@ export default function AdminLayout() {
           borderTopWidth: 1,
           paddingBottom: 5,
           paddingTop: 5,
-          height: 120,
+          height: 80,
         },
         tabBarLabelStyle: {
           fontSize: 12,
